@@ -1,0 +1,12 @@
+├── client/              # Frontend code (Vite/React)
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.ts
+├── server/              # Backend code (Express/Prisma)
+│   ├── src/
+│   ├── prisma/
+│   ├── package.json
+│   └── tsconfig.json
+├── package.json         # Root package.json (optional for workspaces)
+└── README.md
