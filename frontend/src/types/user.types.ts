@@ -3,6 +3,7 @@ export interface LoggedInUserInterface {
       id: string;
       email: string;
       name: string;
+      status?: string;
     };
     token: string;
   }

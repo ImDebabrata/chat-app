@@ -25,7 +25,6 @@ const authMiddleware = async (
       return;
     }
 
-    console.log(decoded,'the decoded value')
 
     // Fetch user from DB to ensure they exist
     const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
