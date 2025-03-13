@@ -423,8 +423,8 @@ function DashboardScreen() {
                             <div className={`
                               max-w-[80%] md:max-w-[70%] 
                               ${isCurrentUser 
-                                ? 'bg-primary text-white rounded-tl-2xl rounded-tr-sm rounded-bl-2xl ml-auto' 
-                                : 'bg-white text-gray-800 border rounded-tr-2xl rounded-tl-sm rounded-br-2xl shadow-sm mr-auto'
+                                ? 'bg-primary text-white rounded-tl-4xl rounded-br-4xl rounded-tr-sm rounded-bl-sm ml-auto' 
+                                : 'bg-white text-gray-800 border rounded-tr-4xl rounded-bl-4xl rounded-tl-sm rounded-br-sm shadow-sm mr-auto'
                               } 
                               p-3 px-4
                             `}>
