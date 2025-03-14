@@ -9,12 +9,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import useAuth from "@/hooks/useAuth";
 import { LoggedInUserInterface } from "@/types/user.types";
 import { MessageInterface } from "@/types/message.types";
-import { useSearchParams } from "react-router";
+import { useSearchParams, useNavigate } from "react-router";
 import { useSocket } from "@/hooks/useSocket";
 import audio from "../../../assets/notification.mp3";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { Menu, X, Send, Search } from "lucide-react";
+import { Menu, X, Send, Search, LogOut } from "lucide-react";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
 
 function DashboardScreen() {
   const socket = useSocket();
@@ -22,7 +30,8 @@ function DashboardScreen() {
   const [selectedUser, setSelectedUser] = useState<
     LoggedInUserInterface["user"] | null
   >(null);
-  const { loggedInUser } = useAuth();
+  const { loggedInUser, handleSignOut } = useAuth();
+  const navigate = useNavigate();
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -31,6 +40,7 @@ function DashboardScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   // Scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -317,6 +327,24 @@ function DashboardScreen() {
     );
   };
 
+  // Handle logout
+  const handleLogout = useCallback(() => {
+    // Update user status to offline before logging out
+    if (loggedInUser?.user?.id) {
+      socket.emit("updateStatus", {
+        userId: loggedInUser.user.id,
+        status: "offline",
+      });
+    }
+    
+    // Disconnect socket
+    socket.disconnect();
+    
+    // Sign out and redirect to login
+    handleSignOut();
+    navigate("/signin");
+  }, [loggedInUser, handleSignOut, navigate, socket]);
+
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-gray-50">
       {/* Mobile Header */}
@@ -343,10 +371,21 @@ function DashboardScreen() {
           md:static absolute
           z-10
           overflow-hidden
+          flex flex-col
         `}
       >
+        <div className="p-4 border-b flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-800">Contacts</h2>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => setShowLogoutDialog(true)}
+            className="text-gray-600 hover:text-red-500 hover:bg-red-50"
+          >
+            <LogOut size={20} />
+          </Button>
+        </div>
         <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">Contacts</h2>
           <div className="relative">
             <Input
               placeholder="Search users..."
@@ -357,7 +396,7 @@ function DashboardScreen() {
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
           </div>
         </div>
-        <ScrollArea className="h-[calc(100vh-180px)] md:h-[calc(100vh-130px)]">
+        <ScrollArea className="h-[calc(100vh-180px)] md:h-[calc(100vh-130px)] flex-1">
           <div className="p-2">
             {loadingUsers ? (
               <div className="space-y-3 p-2">
@@ -590,6 +629,26 @@ function DashboardScreen() {
           </>
         )}
       </div>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Logout</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to logout? You will need to sign in again to access your messages.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setShowLogoutDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleLogout}>
+              Logout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
