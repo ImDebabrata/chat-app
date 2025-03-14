@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "npx nodemon",
     "build": "rimraf dist && tsc",
-    "start": "rimraf dist && tsc && node dist/index.js",
+    "start": "rimraf dist && tsc && prisma generate && prisma migrate deploy && node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
     "docker:build": "docker compose build",
