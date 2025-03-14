@@ -28,6 +28,9 @@ function DashboardScreen() {
   const [isInitialized, setIsInitialized] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -99,8 +102,50 @@ function DashboardScreen() {
     }
   }, [selectedUser, loggedInUser?.user, socket]);
 
+  const handleStopTyping = useCallback(() => {
+    if (!selectedUser || !loggedInUser?.user || !isTyping) return;
+    
+    setIsTyping(false);
+    socket.emit("typingStopped", {
+      senderId: loggedInUser.user.id,
+      receiverId: selectedUser.id
+    });
+    
+    // Clear the timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+  }, [selectedUser, loggedInUser?.user, socket, isTyping]);
+
+  // Handle typing indicator
+  const handleStartTyping = useCallback(() => {
+    if (!selectedUser || !loggedInUser?.user || isTyping) return;
+    
+    setIsTyping(true);
+    socket.emit("typingStarted", {
+      senderId: loggedInUser.user.id,
+      receiverId: selectedUser.id
+    });
+    
+    // Clear any existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Set timeout to stop typing after 3 seconds of inactivity
+    typingTimeoutRef.current = setTimeout(() => {
+      handleStopTyping();
+    }, 3000);
+  }, [selectedUser, loggedInUser?.user, socket, isTyping,handleStopTyping]);
+
   const handleSendMessage = useCallback(async () => {
     if (!selectedUser || !message.trim() || !loggedInUser?.user) return;
+
+    // When sending a message, stop the typing indicator
+    if (isTyping) {
+      handleStopTyping();
+    }
 
     const tempId = `temp-${Date.now()}`;
     // Optimistic update with temporary ID
@@ -137,7 +182,19 @@ function DashboardScreen() {
     }
 
     setMessage("");
-  }, [loggedInUser?.user, message, selectedUser, socket]);
+  }, [loggedInUser?.user, message, selectedUser, socket, isTyping,handleStopTyping]);
+
+  // Handle message input change with typing indicator
+  const handleMessageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setMessage(newValue);
+    
+    if (newValue.trim()) {
+      handleStartTyping();
+    } else {
+      handleStopTyping();
+    }
+  }, [handleStartTyping, handleStopTyping]);
 
   useEffect(() => {
     scrollToBottom();
@@ -175,12 +232,47 @@ function DashboardScreen() {
           // Play notification sound if message is from the other person
           if (newMessage.senderId !== loggedInUser.user.id) {
             new Audio(audio).play().catch(() => {});
+            
+            // When receiving a message, clear typing indicator for that user
+            setTypingUsers(prev => ({
+              ...prev,
+              [newMessage.senderId]: false
+            }));
           }
           return [...prev, newMessage];
         }
 
         return prev;
       });
+    });
+
+    // Handle typing indicators
+    socket.on("userTyping", (data: { senderId: string; receiverId: string }) => {
+      // Only show typing indicator if it's relevant to current conversation
+      if (
+        selectedUser && 
+        data.senderId === selectedUser.id && 
+        data.receiverId === loggedInUser.user.id
+      ) {
+        setTypingUsers(prev => ({
+          ...prev,
+          [data.senderId]: true
+        }));
+      }
+    });
+    
+    socket.on("userStoppedTyping", (data: { senderId: string; receiverId: string }) => {
+      // Remove typing indicator
+      if (
+        selectedUser && 
+        data.senderId === selectedUser.id && 
+        data.receiverId === loggedInUser.user.id
+      ) {
+        setTypingUsers(prev => ({
+          ...prev,
+          [data.senderId]: false
+        }));
+      }
     });
 
     // Handle status updates
@@ -194,6 +286,13 @@ function DashboardScreen() {
     return () => {
       socket.off("chatMessage");
       socket.off("updateStatus");
+      socket.off("userTyping");
+      socket.off("userStoppedTyping");
+      
+      // Clear any typing timeouts
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
   }, [loggedInUser, selectedUser, socket]);
 
@@ -348,7 +447,11 @@ function DashboardScreen() {
                 <h2 className="text-md font-semibold text-gray-900">
                   {selectedUser.name}
                 </h2>
-                <p className="text-xs text-gray-500">{selectedUser.status}</p>
+                <p className="text-xs text-gray-500">
+                  {typingUsers[selectedUser.id] 
+                    ? <span className="text-primary animate-pulse">typing...</span>
+                    : selectedUser.status}
+                </p>
               </div>
             </div>
           </div>
@@ -440,6 +543,23 @@ function DashboardScreen() {
                         </div>
                       );
                     })}
+                    {/* Typing Indicator */}
+                    {typingUsers[selectedUser.id] && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="flex justify-start w-full mt-2"
+                      >
+                        <div className="bg-white text-gray-800 border rounded-md shadow-sm p-3 px-4 max-w-[60%]">
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
                     <div ref={messagesEndRef} />
                   </AnimatePresence>
                 )}
@@ -452,8 +572,9 @@ function DashboardScreen() {
                 <Input
                   placeholder="Type a message..."
                   value={message}
-                  onChange={(e) => setMessage(e.target.value)}
+                  onChange={handleMessageChange}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                  onBlur={handleStopTyping}
                   className="flex-1 py-6 px-4"
                 />
                 <Button 

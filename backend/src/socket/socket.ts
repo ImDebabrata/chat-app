@@ -71,6 +71,17 @@ export function initializeSocket(
       }
     });
 
+    // Listen for typing indicator events
+    socket.on("typingStarted", (data: { senderId: string; receiverId: string }) => {
+      // Broadcast to everyone except the sender
+      socket.broadcast.emit("userTyping", data);
+    });
+
+    socket.on("typingStopped", (data: { senderId: string; receiverId: string }) => {
+      // Broadcast to everyone except the sender
+      socket.broadcast.emit("userStoppedTyping", data);
+    });
+
     // Listen for status update (online/offline)
     socket.on("updateStatus", async (data: { userId: string; status: string }) => {
       try {
